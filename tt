@@ -17,6 +17,8 @@ DEFAULT_FONT = '-misc-fixed-bold-r-normal--15-140-75-75-c-90-iso8859-1'  # 9x15b
 ALTERNATE_FONT = '-b&h-lucida-medium-r-normal-*-12-120-75-75-p-71-iso10646-1'
 
 class TT
+  VERSION = '0.1'
+
   def initialize(opts={})
     @opts = opts
 
@@ -41,6 +43,10 @@ class TT
       yscrollbar @yscroll  if opts["sb"]
       height opts["height"]
       width opts["width"]
+      foreground opts["fg"]
+      background opts["bg"]
+      insertbackground opts["cr"] || opts["fg"]
+      insertofftime 0  # don't blink
       tabstyle 'wordprocessor'
       pack 'fill' => 'both', 'expand' => 'yes'
     }
@@ -245,6 +251,8 @@ opts = {
   "sb" => true,
   "fw" => true,
   "sc" => true,
+  "bg" => "#ffffff",
+  "fg" => "#000000",
   "fn" => DEFAULT_FONT,
   "af" => ALTERNATE_FONT,
   "width" => "80",
@@ -257,7 +265,7 @@ until ARGV.empty?
   case arg = ARGV.shift
   when /\A([+-])(sb|sc|fw)\z/
     opts[$2] = ($1 == "-")
-  when /\A-(fn|af|tn|title)\z/
+  when /\A-(fn|af|tn|fg|bg|cr|title)\z/
     opts[$1] = ARGV.shift
   when /\A-(g(eometry)?)\z/
     g = ARGV.shift
@@ -270,6 +278,13 @@ until ARGV.empty?
   when "-e"
     opts["cmd"] = ARGV
     break
+  when "-h", "-help", "--help"
+    puts "tt #{TT::VERSION}"
+    puts "Usage: tt [-help] [--help]
+ [-tn string] [-geometry geometry] [-/+fw] [-/+sb] [-/+sc] [-bg color]
+ [-fg color] [-cr color] [-fn fontname] [-af fontname] [-title string]
+ [-e command arg...]"
+    exit
   else
     abort "invalid argument #{arg}"
   end
