@@ -77,7 +77,8 @@ class TT
       
     }
 
-    @text.bind("Button-2", method(:paste_callback))
+    @text.bind("<Paste>") { Tk.callback_break }
+    @text.bind("<PasteSelection>", method(:paste_callback))
 
     menu = TkMenu.new(@root) { tearoff false }
     
