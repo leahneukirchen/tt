@@ -40,8 +40,12 @@ class TT
     @mono = TkVariable.new
     @mono.value = opts["fw"]
 
+    @panes = TkPanedwindow.new(@root) {
+      orient 'vertical'
+    }
+
     # XXX provide text via socket?
-    @text = TkText.new(@root) {
+    @text = TkText.new(@panes) {
       yscrollbar @yscroll  if opts["sb"]
       height opts["height"]
       width opts["width"]
@@ -52,7 +56,6 @@ class TT
       tabstyle 'wordprocessor'
       pack 'fill' => 'both', 'expand' => 'yes'
     }
-    font_cmd
 
     @text.bind("KeyPress") { |o|
       case o.keysym
@@ -88,6 +91,28 @@ class TT
     @text.bind("<Paste>") { Tk.callback_break }
     @text.bind("<PasteSelection>", method(:paste_callback))
     @text.tag_configure "href", :underline => true
+
+    @hold = TkText.new(@panes) {
+      foreground opts["fg"]
+      background opts["bg"]
+      insertbackground opts["cr"] || opts["fg"]
+      insertofftime 0  # don't blink
+      tabstyle 'wordprocessor'
+      pack 'fill' => 'both', 'expand' => 'yes'
+    }
+    @hold.bind("Shift-Return") {
+      @text.mark_set('insert', 'end')
+      @output.write @hold.get('1.0', 'end')
+      @text.mark_set('insert', 'end')
+      @hold.delete('1.0', 'end')
+      Tk.callback_break
+    }
+
+    @panes.add @text, :stretch => 'always'
+    @panes.add @hold, :stretch => 'never', :height => '1'
+    @panes.pack 'fill' => 'both', 'expand' => 'yes'
+
+    font_cmd
 
     menu = TkMenu.new(@root) { tearoff false }
     
@@ -137,6 +162,7 @@ class TT
   attr_reader :font
   def font=(font)
     @text.font = font
+    @hold.font = font
     @font = font
     @font_height = TkFont.metrics(font, "linespace")
     @font_width = TkFont.measure(font, "0")
