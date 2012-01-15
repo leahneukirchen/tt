@@ -21,10 +21,7 @@ end
 DEFAULT_FONT = '-misc-fixed-bold-r-normal--15-140-75-75-c-90-iso8859-1'  # 9x15bold
 set_font DEFAULT_FONT
 
-#TkOption.add "*Scrollbar.borderWidth", 0
-#TkOption.add "*Scrollbar.relief", "flat"
-
-$root = TkRoot.new { title "neinterm" }
+$root = TkRoot.new { title "tt" }
 
 yscroll = TkScrollbar.new($root) {
   pack 'side' => 'left', 'fill' => 'y'
