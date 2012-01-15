@@ -17,28 +17,35 @@ DEFAULT_FONT = '-misc-fixed-bold-r-normal--15-140-75-75-c-90-iso8859-1'  # 9x15b
 ALTERNATE_FONT = '-b&h-lucida-medium-r-normal-*-12-120-75-75-p-71-iso10646-1'
 
 class TT
-  def initialize(font=DEFAULT_FONT)
-    @root = TkRoot.new { title "tt" }
-    @yscroll = TkScrollbar.new(@root) {
-      pack 'side' => 'left', 'fill' => 'y'
+  def initialize(opts={})
+    @opts = opts
+
+    @root = TkRoot.new {
+      title "tt"
+      geometry(opts["geom"])  if opts["geom"]
     }
 
+    if @opts["sb"]
+      @yscroll = TkScrollbar.new(@root) {
+        pack 'side' => 'left', 'fill' => 'y'
+      }
+    end
+
     @scroll = TkVariable.new
-    @scroll.value = "1"
+    @scroll.value = opts["sc"]
     @mono = TkVariable.new
-    @mono.value = "1"
+    @mono.value = opts["fw"]
 
     # XXX provide text via socket?
     @text = TkText.new(@root) {
-      yscrollbar @yscroll
+      yscrollbar @yscroll  if opts["sb"]
       # XXX default size
-      height 25
-      width 80
-      font @font
+      height opts["height"]
+      width opts["width"]
       tabstyle 'wordprocessor'
       pack 'fill' => 'both', 'expand' => 'yes'
     }
-    self.font = font
+    font_cmd
 
     @text.bind("KeyPress") { |o|
       case o.keysym
@@ -57,6 +64,7 @@ class TT
         
         if @text.index('end') == @text.index('insert + 1 chars')
           @output.write o.char
+          @text.see('end')
           Tk.callback_break
         elsif o.char == ?\C-w
           # XXX skip whitespace first
@@ -72,7 +80,7 @@ class TT
 
     @text.bind("Button-2", method(:paste_callback))
 
-    menu = TkMenu.new(@root) { tearoff false  }
+    menu = TkMenu.new(@root) { tearoff false }
     
     menu.add_command :label => "fwd", :command => method(:fwd_cmd)
     menu.add_command :label => "bwd", :command => method(:bwd_cmd)
@@ -82,8 +90,13 @@ class TT
     menu.add_command :label => "clear", :command => method(:clear_cmd)
     menu.add_checkbutton :label => "mono", :variable => @mono, :command => method(:font_cmd)
     menu.add_checkbutton :label => "scroll", :variable => @scroll
+    @lastcmd = 0
 
-    @root.bind '3', proc{|x,y| menu.popup(x,y)}, "[expr %X - 10] [expr %Y - 10]"
+    # hacky
+    menufontheight = TkFont.metrics("TkMenuFont", "linespace")+5
+    @root.bind '3', lambda { |x, y|
+      menu.popup(x-10,y-10-@lastcmd*menufontheight)
+    }, "%X %Y"
 
     if TIOCSWINSZ
       pw = ph = 0
@@ -129,8 +142,8 @@ class TT
   end
 
   def run(command=nil)
-    command ||= [ENV["SHELL"]]
-    ENV["TERM"] = "9term"
+    command ||= @opts["cmd"]
+    ENV["TERM"] = @opts["term"]
     @input, @output, @pid = PTY.spawn(*command)
 
     Thread.new {
@@ -172,6 +185,7 @@ class TT
   end
 
   def fwd_cmd
+    @lastcmd = 0
     sel = @text.get('sel.first', 'sel.last')  rescue return
     if match = @text.tksearch(sel, 'sel.last', 'end')
       @text.tag_remove 'sel', 'sel.first', 'sel.last'
@@ -181,6 +195,7 @@ class TT
   end
 
   def bwd_cmd
+    @lastcmd = 1
     sel = @text.get('sel.first', 'sel.last')  rescue return
     if match = @text.tksearch(['backwards'], sel, 'sel.first', '1.0')
       @text.tag_remove 'sel', 'sel.first', 'sel.last'
@@ -189,15 +204,22 @@ class TT
     end
   end
 
-  def font_cmd
-    if @mono.value == "1"
-      self.font = DEFAULT_FONT
-    else
-      self.font = ALTERNATE_FONT
-    end
+  def cut_cmd
+    @lastcmd = 2
+    sel = @text.get('sel.first', 'sel.last')  rescue return
+    @text.delete('sel.first', 'sel.last')
+    # XXX hack
+    IO.popen("xsel -i", "w") { |xsel| xsel << sel }
+  end
+
+  def paste_cmd
+    @lastcmd = 3
+    sel = TkSelection.get(:type => "UTF8_STRING")  rescue ""
+    @text.insert('insert', sel)
   end
 
   def send_cmd
+    @lastcmd = 4
     sel = @text.get('sel.first', 'sel.last')  rescue return
     sel << "\n"  unless sel[-1] == "\n"
     @text.mark_set('insert', 'end')
@@ -206,22 +228,51 @@ class TT
   end
 
   def clear_cmd
+    @lastcmd = 5
     @text.delete('1.0', 'end')
   end
 
-  def cut_cmd
-    sel = @text.get('sel.first', 'sel.last')
-    @text.delete('sel.first', 'sel.last')
-    # XXX hack
-    IO.popen("xsel -i", "w") { |xsel| xsel << sel }
-  end
-
-  def paste_cmd
-    sel = TkSelection.get(:type => "UTF8_STRING")  rescue ""
-    @text.insert('insert', sel)
+  def font_cmd
+    if @mono.value == "1"
+      self.font = @opts["fn"]
+    else
+      self.font = @opts["af"]
+    end
   end
 end
 
-t = TT.new
+opts = {
+  "sb" => true,
+  "fw" => true,
+  "fn" => DEFAULT_FONT,
+  "af" => ALTERNATE_FONT,
+  "width" => "80",
+  "height" => "24",
+  "term" => "9term",
+  "cmd" => [ENV["SHELL"] || "/bin/sh"],
+}
+until ARGV.empty?
+  case arg = ARGV.shift
+  when /\A([+-])(sb|sc|fw)\z/
+    opts[$2] = ($1 == "-")
+  when /\A-(fn|af|term)\z/
+    opts[$1] = ARGV.shift
+  when /\A-(g(eometry)?)\z/
+    g = ARGV.shift
+    if g =~ /\A(\d+x\d+)?([+-]\d+[+-]\d+)?\z/
+      opts["width"], opts["height"] = $1.split("x")  if $1
+      opts["geom"] = $2
+    else
+      abort "invalid geometry #{g}"
+    end
+  when "-e"
+    opts["cmd"] = ARGV
+    break
+  else
+    abort "invalid argument #{arg}"
+  end
+end
+
+t = TT.new(opts)
 t.run
 Tk.mainloop
