@@ -273,8 +273,11 @@ class TT
     @lastcmd = 2
     sel = @text.get('sel.first', 'sel.last')  rescue return
     @text.delete('sel.first', 'sel.last')
-    # XXX hack
-    IO.popen("xsel -i", "w") { |xsel| xsel << sel }
+
+    TkSelection.clear
+    TkSelection.handle(Tk.root, :selection => "PRIMARY",
+                       :type => "UTF8_STRING") { sel }
+    TkSelection.set_owner(Tk.root, :selection => "PRIMARY")
   end
 
   def paste_cmd
