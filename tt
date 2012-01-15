@@ -21,7 +21,7 @@ class TT
     @opts = opts
 
     @root = TkRoot.new {
-      title "tt"
+      title opts["title"]
       geometry(opts["geom"])  if opts["geom"]
     }
 
@@ -142,7 +142,8 @@ class TT
 
   def run(command=nil)
     command ||= @opts["cmd"]
-    ENV["TERM"] = @opts["term"]
+    ENV["TERM"] = @opts["tn"]
+    ENV["WINDOWID"] = (Integer(Tk::Wm.frame(@root)) + 1).to_s  # ugh
     @input, @output, @pid = PTY.spawn(*command)
 
     Thread.new {
@@ -247,14 +248,15 @@ opts = {
   "af" => ALTERNATE_FONT,
   "width" => "80",
   "height" => "24",
-  "term" => "9term",
+  "tn" => "9term",
+  "title" => "tt",
   "cmd" => [ENV["SHELL"] || "/bin/sh"],
 }
 until ARGV.empty?
   case arg = ARGV.shift
   when /\A([+-])(sb|sc|fw)\z/
     opts[$2] = ($1 == "-")
-  when /\A-(fn|af|term)\z/
+  when /\A-(fn|af|tn|title)\z/
     opts[$1] = ARGV.shift
   when /\A-(g(eometry)?)\z/
     g = ARGV.shift
