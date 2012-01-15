@@ -13,191 +13,214 @@ else
   TIOCSWINSZ = nil
 end
 
-# XXX dynamic font changes (at least fixed/proportional)
-def set_font(font)
-  if $text
-    $text.font = font
-  end
-  @font = font
-  @font_height = TkFont.metrics(font, "linespace")
-  @font_width = TkFont.measure(font, "0")
-end
 DEFAULT_FONT = '-misc-fixed-bold-r-normal--15-140-75-75-c-90-iso8859-1'  # 9x15bold
-set_font DEFAULT_FONT
+ALTERNATE_FONT = '-b&h-lucida-medium-r-normal-*-12-120-75-75-p-71-iso10646-1'
 
-$root = TkRoot.new { title "tt" }
+class TT
+  def initialize(font=DEFAULT_FONT)
+    @root = TkRoot.new { title "tt" }
+    @yscroll = TkScrollbar.new(@root) {
+      pack 'side' => 'left', 'fill' => 'y'
+    }
 
-yscroll = TkScrollbar.new($root) {
-  pack 'side' => 'left', 'fill' => 'y'
-}
+    @scroll = TkVariable.new
+    @scroll.value = "1"
 
-p @font
-# XXX provide text via socket?
-$text = text = TkText.new($root) {
-  yscrollbar yscroll
-  # XXX default size
-  height 25
-  width 80
-  font DEFAULT_FONT
-  tabstyle 'wordprocessor'
-  pack 'fill' => 'both', 'expand' => 'yes'
-}
+    # XXX provide text via socket?
+    @text = TkText.new(@root) {
+      yscrollbar @yscroll
+      # XXX default size
+      height 25
+      width 80
+      font @font
+      tabstyle 'wordprocessor'
+      pack 'fill' => 'both', 'expand' => 'yes'
+    }
+    self.font = font
 
-scroll = TkVariable.new
-scroll.value = "1"
-
-ENV["TERM"] = "9term"
-input, output, pid = PTY.spawn('/usr/bin/rc')
-#input.set_encoding "UTF-8", "UTF-8"
-#output.set_encoding "UTF-8", "UTF-8"
-
-# hack
-def fix_utf8(buf)
-  buf.force_encoding("UTF-8")
-  buf.encode!("UTF-16", :invalid => :replace, :undef => :replace)
-  buf.encode!("UTF-8")
-  buf
-end
-
-Thread.new {
-  begin
-    while buf = input.readpartial(4096)
-      buf = fix_utf8(buf).delete("\r")
-      
-      # XXX handle \r properly, clear to beginning of line? (also for C-u)
-      out = ""
-      buf.each_char { |char|
-        if char == "\b"
-          if out.empty?
-            text.delete('end - 2 chars')
-          else
-            out.chop!
-          end
+    @text.bind("KeyPress") { |o|
+      case o.keysym
+      when "Next", "Prior", "Up", "Down", "Left", "Right"
+        # XXX good idea left/right?
+        # PASSTHRU, no callback_break!
+      when "Home"
+        @text.yview_moveto 0
+        @text.mark_set('insert', '1.0')
+        Tk.callback_break
+      when "End"
+        @text.yview_moveto 1
+        @text.mark_set('insert', 'end')
+        Tk.callback_break
+      else
+        
+        if @text.index('end') == @text.index('insert + 1 chars')
+          @output.write o.char
+          Tk.callback_break
+        elsif o.char == ?\C-w
+          # XXX skip whitespace first
+          @text.delete('insert - 1c wordstart', 'insert')
+        elsif o.char == ?\C-u
+          @text.delete('insert linestart', 'insert')
         else
-          out << char
+          # PASSTHRU, no callback_break!
+        end
+      end
+      
+    }
+
+    @text.bind("Button-2", method(:paste_callback))
+
+    menu = TkMenu.new(@root) { tearoff false  }
+    
+    menu.add_command :label => "fwd", :command => method(:fwd_cmd)
+    menu.add_command :label => "bwd", :command => method(:bwd_cmd)
+    menu.add_command :label => "cut", :command => method(:cut_cmd)
+    menu.add_command :label => "paste", :command => method(:paste_cmd)
+    menu.add_command :label => "font", :command => method(:font_cmd)
+    menu.add_command :label => "send", :command => method(:send_cmd)
+    menu.add_command :label => "clear", :command => method(:clear_cmd)
+    menu.add_checkbutton :label => "scroll", :variable => @scroll
+
+    @root.bind '3', proc{|x,y| menu.popup(x,y)}, "[expr %X - 10] [expr %Y - 10]"
+
+    if TIOCSWINSZ
+      pw = ph = 0
+      @root.bind('Configure') { |o|
+        # XXX slow down
+        if @pid
+          unless pw == o.width && ph == o.height
+            pw = o.width
+            ph = o.height
+            w = @text.winfo_width / @font_width
+            h = @text.winfo_height / @font_height
+            @output.ioctl(TIOCSWINSZ, [h, w, ph, pw].pack('SSSS'))
+          end
         end
       }
+    end
 
-      out.gsub!(/\033\];(.*?)\007/) { 
-        $root.title = $1
-        ""
-      }
+    @text.focus
+  end
 
-      text.insert 'end', out
-      
-      # XXX proper autoscroll, output $LINES lines
-      if scroll.value == "1"
-        text.yview_moveto 1
+  def paste_callback(event)
+    sel = TkSelection.get(:type => "UTF8_STRING")  rescue ""
+    @text.mark_set('insert', 'end')
+    @output.write sel
+    @text.mark_set('insert', 'end')
+    Tk.callback_break
+  end
+
+  attr_reader :font
+  def font=(font)
+    @text.font = font
+    @font = font
+    @font_height = TkFont.metrics(font, "linespace")
+    @font_width = TkFont.measure(font, "0")
+  end
+
+  # hack
+  def fix_utf8(buf)
+    buf.force_encoding("UTF-8")
+    buf.encode!("UTF-16", :invalid => :replace, :undef => :replace)
+    buf.encode!("UTF-8")
+    buf
+  end
+
+  def run(command=nil)
+    command ||= [ENV["SHELL"]]
+    ENV["TERM"] = "9term"
+    @input, @output, @pid = PTY.spawn(*command)
+
+    Thread.new {
+      begin
+        while buf = @input.readpartial(4096)
+          buf = fix_utf8(buf).delete("\r")
+          
+          # XXX handle \r properly, clear to beginning of line? (also for C-u)
+          out = ""
+          buf.each_char { |char|
+            if char == "\b"
+              if out.empty?
+                @text.delete('end - 2 chars')
+              else
+                out.chop!
+              end
+            else
+              out << char
+            end
+          }
+          
+          out.gsub!(/\033\];(.*?)\007/) { 
+            @root.title = $1
+            ""
+          }
+          
+          @text.insert 'end', out
+          
+          # XXX proper autoscroll, output $LINES lines
+          if @scroll.value == "1"
+            @text.yview_moveto 1
+          end
+        end
+      rescue Errno::EIO
+        # XXX too late now anyway?
+        exit
       end
-    end
-  rescue Errno::EIO
-    # XXX too late now anyway?
-    exit
+    }
   end
-}
 
-
-text.bind("KeyPress") { |o|
-  case o.keysym
-  when "Next", "Prior", "Up", "Down", "Left", "Right"
-    # XXX good idea left/right?
-    # PASSTHRU, no callback_break!
-  when "Home"
-    text.yview_moveto 0
-    text.mark_set('insert', '1.0')
-    Tk.callback_break
-  when "End"
-    text.yview_moveto 1
-    text.mark_set('insert', 'end')
-    Tk.callback_break
-  else
-
-    if text.index('end') == text.index('insert + 1 chars')
-      output.write o.char
-      Tk.callback_break
-    elsif o.char == ?\C-w
-      # XXX skip whitespace first
-      text.delete('insert - 1c wordstart', 'insert')
-    elsif o.char == ?\C-u
-      text.delete('insert linestart', 'insert')
-    else
-      #PASSTHRU, no callback_break!
+  def fwd_cmd
+    sel = @text.get('sel.first', 'sel.last')  rescue return
+    if match = @text.tksearch(sel, 'sel.last', 'end')
+      @text.tag_remove 'sel', 'sel.first', 'sel.last'
+      @text.tag_add 'sel', match, "#{match} + #{sel.size} chars"
+      @text.mark_set('insert', 'sel.first')
     end
   end
 
-}
-
-text.bind("Button-2") { |o|
-  sel = TkSelection.get(:type => "UTF8_STRING")  rescue ""
-
-  text.mark_set('insert', 'end')
-
-  output.write sel
-
-  text.mark_set('insert', 'end')
-
-  Tk.callback_break
-}
-
-menu = TkMenu.new($root) { tearoff false }
-menu.add :command, :label => "fwd",
-  :command => lambda {
-  sel = text.get('sel.first', 'sel.last')  rescue break
-  if match = text.tksearch(sel, 'sel.last', 'end')
-    text.tag_remove 'sel', 'sel.first', 'sel.last'
-    text.tag_add 'sel', match, "#{match} + #{sel.size} chars"
-    text.mark_set('insert', 'sel.first')
+  def bwd_cmd
+    sel = @text.get('sel.first', 'sel.last')  rescue return
+    if match = @text.tksearch(['backwards'], sel, 'sel.first', '1.0')
+      @text.tag_remove 'sel', 'sel.first', 'sel.last'
+      @text.tag_add 'sel', match, "#{match} + #{sel.size} chars"
+      @text.mark_set('insert', 'sel.first')
+    end
   end
-}
-menu.add :command, :label => "bwd",
-  :command => lambda {
-  sel = text.get('sel.first', 'sel.last')  rescue break
-  if match = text.tksearch(['backwards'], sel, 'sel.first', '1.0')
-    text.tag_remove 'sel', 'sel.first', 'sel.last'
-    text.tag_add 'sel', match, "#{match} + #{sel.size} chars"
-    text.mark_set('insert', 'sel.first')
-  end
-}
 
-menu.add :command, :label => "cut"
-menu.add :command, :label => "paste"
-menu.add :command, :label => "snarf"
 # XXX should be a checkbutton?
-menu.add :command, :label => "font",
-:command => lambda {
-  if @font == DEFAULT_FONT
-    set_font '-*-lucida-medium-r-*-*-12-*-*-*-*-*-*-*'
-  else
-    set_font DEFAULT_FONT
-  end
-}
-menu.add :command, :label => "send",
-  :command => lambda {
-  sel = text.get('sel.first', 'sel.last') + "\n"  rescue break
-  text.mark_set('insert', 'end')
-  output.write sel
-  text.mark_set('insert', 'end')
-}
-menu.add :command, :label => "clear",
-  :command => lambda { text.delete('1.0', 'end') }
-menu.add :checkbutton, :label => "scroll", :variable => scroll
-%w(One Two Three).each {|i| }
-$root.bind '3', proc{|x,y| menu.popup(x,y)}, "[expr %X - 10] [expr %Y - 10]"
-
-if TIOCSWINSZ
-  pw = ph = 0
-  $root.bind('Configure') { |o|
-    # XXX slow down
-    unless pw == o.width && ph == o.height
-      pw = o.width
-      ph = o.height
-      w = text.winfo_width / @font_width
-      h = text.winfo_height / @font_height
-      output.ioctl(TIOCSWINSZ, [h, w, ph, pw].pack('SSSS'))
+  def font_cmd
+    if font == DEFAULT_FONT
+      self.font = ALTERNATE_FONT
+    else
+      self.font = DEFAULT_FONT
     end
-  }
+  end
+
+  def send_cmd
+    sel = @text.get('sel.first', 'sel.last')  rescue return
+    sel << "\n"  unless sel[-1] == "\n"
+    @text.mark_set('insert', 'end')
+    @output.write sel
+    @text.mark_set('insert', 'end')
+  end
+
+  def clear_cmd
+    @text.delete('1.0', 'end')
+  end
+
+  def cut_cmd
+    sel = @text.get('sel.first', 'sel.last')
+    @text.delete('sel.first', 'sel.last')
+    # XXX hack
+    IO.popen("xsel -i", "w") { |xsel| xsel << sel }
+  end
+
+  def paste_cmd
+    sel = TkSelection.get(:type => "UTF8_STRING")  rescue ""
+    @text.insert('insert', sel)
+  end
 end
 
-text.focus
-
+t = TT.new
+t.run
 Tk.mainloop
