@@ -85,6 +85,7 @@ class TT
 
     @text.bind("<Paste>") { Tk.callback_break }
     @text.bind("<PasteSelection>", method(:paste_callback))
+    @text.tag_configure "href", :underline => true
 
     menu = TkMenu.new(@root) { tearoff false }
     
@@ -147,6 +148,8 @@ class TT
     buf
   end
 
+  URL_RE = %r{((?:https?://|ftp://|news://|mailto:|file://|\bwww\.)[a-zA-Z0-9\-\@;\/?:&=%\$_.+!*\x27,~#]*(?:\([a-zA-Z0-9\-\@;\/?:&=%\$_.+!*\x27,~#]*\)|[a-zA-Z0-9\-\@;\/?:&=%\$_+*~])+)}
+
   def run(command=nil)
     command ||= @opts["cmd"]
     ENV["TERM"] = @opts["tn"]
@@ -176,8 +179,19 @@ class TT
             @root.title = $1
             ""
           }
-          
-          @text.insert 'end', out
+
+          if @opts["cu"]
+            out.split(URL_RE).each { |piece|
+              if piece =~ URL_RE
+                @text.insert 'end', piece, "href"
+                @text.tag_bind "href", "1", method(:link_action)
+              else
+                @text.insert 'end', piece
+              end
+            }
+          else
+            @text.insert 'end', out
+          end
           
           if @scroll.value == "1"
             @text.yview_moveto 1
@@ -245,16 +259,24 @@ class TT
       self.font = @opts["af"]
     end
   end
+
+  def link_action(ev)
+    a, b = @text.tag_prevrange("href", @text.index("@#{ev.x},#{ev.y}"))
+    url = @text.get(a, b)
+    system @opts["browser"], url
+  end
 end
 
 opts = {
   "sb" => true,
   "fw" => true,
   "sc" => true,
+  "cu" => true,
   "bg" => "#ffffff",
   "fg" => "#000000",
   "fn" => DEFAULT_FONT,
   "af" => ALTERNATE_FONT,
+  "browser" => "xdg-open",
   "width" => "80",
   "height" => "24",
   "tn" => "9term",
@@ -263,9 +285,9 @@ opts = {
 }
 until ARGV.empty?
   case arg = ARGV.shift
-  when /\A([+-])(sb|sc|fw)\z/
+  when /\A([+-])(sb|sc|fw|cu)\z/
     opts[$2] = ($1 == "-")
-  when /\A-(fn|af|tn|fg|bg|cr|title)\z/
+  when /\A-(fn|af|tn|fg|bg|cr|title|browser)\z/
     opts[$1] = ARGV.shift
   when /\A-(g(eometry)?)\z/
     g = ARGV.shift
@@ -282,8 +304,8 @@ until ARGV.empty?
     puts "tt #{TT::VERSION}"
     puts "Usage: tt [-help] [--help]
  [-tn string] [-geometry geometry] [-/+fw] [-/+sb] [-/+sc] [-bg color]
- [-fg color] [-cr color] [-fn fontname] [-af fontname] [-title string]
- [-e command arg...]"
+ [-fg color] [-cr color] [-fn fontname] [-af fontname] [-browser string]
+ [-title string] [-e command arg...]"
     exit
   else
     abort "invalid argument #{arg}"
