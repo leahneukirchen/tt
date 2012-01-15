@@ -244,6 +244,7 @@ end
 opts = {
   "sb" => true,
   "fw" => true,
+  "sc" => true,
   "fn" => DEFAULT_FONT,
   "af" => ALTERNATE_FONT,
   "width" => "80",
