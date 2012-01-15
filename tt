@@ -6,8 +6,12 @@ require 'pty'
 
 Thread.abort_on_exception = true
 
-# XXX Linux only.
-TIOCSWINSZ = 0x5414
+case RUBY_PLATFORM
+when /linux/
+  TIOCSWINSZ = 0x5414
+else
+  TIOCSWINSZ = nil
+end
 
 # XXX dynamic font changes (at least fixed/proportional)
 def set_font(font)
@@ -180,18 +184,19 @@ menu.add :checkbutton, :label => "scroll", :variable => scroll
 %w(One Two Three).each {|i| }
 $root.bind '3', proc{|x,y| menu.popup(x,y)}, "[expr %X - 10] [expr %Y - 10]"
 
-# output.ioctl(TIOCSWINSZ, [25, 80, 0, 0].pack('SSSS'))
-pw = ph = 0
-$root.bind('Configure') { |o|
-  # XXX slow down
-  unless pw == o.width && ph == o.height
-    pw = o.width
-    ph = o.height
-    w = text.winfo_width / @font_width
-    h = text.winfo_height / @font_height
-    output.ioctl(TIOCSWINSZ, [h, w, ph, pw].pack('SSSS'))
-  end
-}
+if TIOCSWINSZ
+  pw = ph = 0
+  $root.bind('Configure') { |o|
+    # XXX slow down
+    unless pw == o.width && ph == o.height
+      pw = o.width
+      ph = o.height
+      w = text.winfo_width / @font_width
+      h = text.winfo_height / @font_height
+      output.ioctl(TIOCSWINSZ, [h, w, ph, pw].pack('SSSS'))
+    end
+  }
+end
 
 text.focus
 
