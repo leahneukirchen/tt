@@ -23,9 +23,11 @@ class TT
     @opts = opts
 
     @root = TkRoot.new {
-      title opts["title"]
       geometry(opts["geom"])  if opts["geom"]
     }
+    self.title = opts["title"]
+    @root.bind("Map") { @mapped = true; self.title = self.title }
+    @root.bind("Unmap") { @mapped = false }
 
     if @opts["sb"]
       @yscroll = TkScrollbar.new(@root) {
@@ -140,6 +142,21 @@ class TT
     @font_width = TkFont.measure(font, "0")
   end
 
+  attr_reader :title
+  def title=(title)
+    if @opts["zi"] && !@mapped
+      if @oldtitle != "*** #{title}"
+        @root.title = "*** #{title}"
+      end
+    else
+      if @oldtitle != title
+        @root.title = title
+      end
+    end
+    @oldtitle = @root.title
+    @title = title
+  end
+
   # hack
   def fix_utf8(buf)
     buf.force_encoding("UTF-8")
@@ -176,7 +193,7 @@ class TT
           }
           
           out.gsub!(/\033\];(.*?)\007/) { 
-            @root.title = $1
+            self.title = $1
             ""
           }
 
@@ -192,6 +209,8 @@ class TT
           else
             @text.insert 'end', out
           end
+
+          self.title = self.title
           
           if @scroll.value == "1"
             @text.yview_moveto 1
@@ -272,6 +291,7 @@ opts = {
   "fw" => true,
   "sc" => true,
   "cu" => true,
+  "zi" => true,
   "bg" => "#ffffff",
   "fg" => "#000000",
   "fn" => DEFAULT_FONT,
@@ -285,7 +305,7 @@ opts = {
 }
 until ARGV.empty?
   case arg = ARGV.shift
-  when /\A([+-])(sb|sc|fw|cu)\z/
+  when /\A([+-])(sb|sc|fw|cu|zi)\z/
     opts[$2] = ($1 == "-")
   when /\A-(fn|af|tn|fg|bg|cr|title|browser)\z/
     opts[$1] = ARGV.shift
@@ -303,9 +323,9 @@ until ARGV.empty?
   when "-h", "-help", "--help"
     puts "tt #{TT::VERSION}"
     puts "Usage: tt [-help] [--help]
- [-tn string] [-geometry geometry] [-/+fw] [-/+sb] [-/+sc] [-bg color]
- [-fg color] [-cr color] [-fn fontname] [-af fontname] [-browser string]
- [-title string] [-e command arg...]"
+ [-tn string] [-geometry geometry] [-/+fw] [-/+sb] [-/+sc] [-/+zi]
+ [-bg color] [-fg color] [-cr color] [-fn fontname] [-af fontname]
+ [-browser string] [-title string] [-e command arg...]"
     exit
   else
     abort "invalid argument #{arg}"
