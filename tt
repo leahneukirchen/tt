@@ -25,6 +25,8 @@ class TT
 
     @scroll = TkVariable.new
     @scroll.value = "1"
+    @mono = TkVariable.new
+    @mono.value = "1"
 
     # XXX provide text via socket?
     @text = TkText.new(@root) {
@@ -76,9 +78,9 @@ class TT
     menu.add_command :label => "bwd", :command => method(:bwd_cmd)
     menu.add_command :label => "cut", :command => method(:cut_cmd)
     menu.add_command :label => "paste", :command => method(:paste_cmd)
-    menu.add_command :label => "font", :command => method(:font_cmd)
     menu.add_command :label => "send", :command => method(:send_cmd)
     menu.add_command :label => "clear", :command => method(:clear_cmd)
+    menu.add_checkbutton :label => "mono", :variable => @mono, :command => method(:font_cmd)
     menu.add_checkbutton :label => "scroll", :variable => @scroll
 
     @root.bind '3', proc{|x,y| menu.popup(x,y)}, "[expr %X - 10] [expr %Y - 10]"
@@ -187,12 +189,11 @@ class TT
     end
   end
 
-# XXX should be a checkbutton?
   def font_cmd
-    if font == DEFAULT_FONT
-      self.font = ALTERNATE_FONT
-    else
+    if @mono.value == "1"
       self.font = DEFAULT_FONT
+    else
+      self.font = ALTERNATE_FONT
     end
   end
 
