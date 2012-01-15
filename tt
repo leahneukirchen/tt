@@ -39,7 +39,6 @@ class TT
     # XXX provide text via socket?
     @text = TkText.new(@root) {
       yscrollbar @yscroll  if opts["sb"]
-      # XXX default size
       height opts["height"]
       width opts["width"]
       tabstyle 'wordprocessor'
@@ -172,7 +171,6 @@ class TT
           
           @text.insert 'end', out
           
-          # XXX proper autoscroll, output $LINES lines
           if @scroll.value == "1"
             @text.yview_moveto 1
           end
