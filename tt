@@ -386,6 +386,11 @@ class TT
     when "Font"
       @mono.value = 1 - @mono.value.to_i
       font_cmd
+    when /\AFont /
+      begin
+        self.font = $'
+      rescue
+      end
     when "Scroll"
       @scroll.value = 1 - @scroll.value.to_i
     when "Paste"
