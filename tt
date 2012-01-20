@@ -259,9 +259,9 @@ class TT
     Thread.new {
       begin
         while buf = @input.readpartial(4096)
-          buf = fix_utf8(buf).delete("\r")
+          # Try to sanitize CRLF.
+          buf = fix_utf8(buf).gsub(/\r+\n/, "\n")
 
-          # XXX handle \r properly, clear to beginning of line? (also for C-u)
           out = ""
           buf.each_char { |char|
             if char == "\b"
@@ -270,6 +270,12 @@ class TT
               else
                 out.chop!
               end
+            elsif char == "\r"
+              if out.empty?
+                # delete to beginning of line
+                @text.delete('end - 1c linestart', 'end - 1c')
+              end
+              # else ignore them
             else
               out << char
             end
