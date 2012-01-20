@@ -52,7 +52,7 @@ class TT
       orient 'vertical'
     }
 
-    @bar = TkText.new {
+    @bar = TkText.new(@panes) {
       height opts["bar"].to_s.count("\n") + 1
       foreground opts["fg"]
       background opts["bg"]
