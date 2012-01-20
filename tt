@@ -1,16 +1,24 @@
 #!/usr/bin/env ruby
 # tt - a 9term-compatible terminal in Ruby/Tk.
 
+# Written by Christian Neukirchen <chneukirchen@gmail.com> in 2012.
+# To the extent possible under law, Christian Neukirchen has waived
+# all copyright and related or neighboring rights to this work.
+# http://creativecommons.org/publicdomain/zero/1.0/
+
 require 'tk'
 require 'pty'
 
 Thread.abort_on_exception = true
 
+SIGINT = 2
 case RUBY_PLATFORM
 when /linux/
   TIOCSWINSZ = 0x5414
+  TIOCSIG    = 0x40045436
 else
   TIOCSWINSZ = nil
+  TIOCSIG    = nil
 end
 
 DEFAULT_FONT = '-misc-fixed-bold-r-normal--15-140-75-75-c-90-iso8859-1'  # 9x15bold
@@ -420,6 +428,18 @@ class TT
       @scroll.value = 1 - @scroll.value.to_i
     when "Paste"
       paste_cmd
+    when "Cut"
+      cut_cmd
+    when "Fwd"
+      fwd_cmd
+    when "Bwd"
+      bwd_cmd
+    when "Send"
+      send_cmd
+    when "Clear"
+      clear_cmd
+    when "Intr"
+      @input.ioctl(TIOCSIG, 2)
     when /\A(\/|Fwd )/
       if match = @text.tksearch($', 'insert + 1c', 'end')
         @text.tag_remove 'sel', 'sel.first', 'sel.last'  rescue nil
