@@ -62,6 +62,7 @@ class TT
       @bar.tag_remove 'run', '0.0', 'end'
       @bar.tag_add 'run', 'run', "@#{ev.x},#{ev.y}"
       @bar.tag_add 'run', "@#{ev.x},#{ev.y}", 'run'
+      Tk.callback_break
     }
 
     @bar.bind('ButtonPress-2') { |ev|
@@ -73,7 +74,7 @@ class TT
       a, b = @bar.tag_ranges('run').first
       if a.nil?  # use single word
         cmd = @bar.get("@#{ev.x},#{ev.y} wordstart",
-                    "@#{ev.x},#{ev.y} wordend")
+                       "@#{ev.x},#{ev.y} wordend")
       else
         cmd = @bar.get(a, b)
       end
@@ -83,7 +84,6 @@ class TT
       @bar.tag_remove 'run', '0.0', 'end'
       Tk.callback_break
     }
-
 
     # XXX provide text via socket?
     @text = TkText.new(@panes) {
@@ -136,9 +136,34 @@ class TT
 
     }
 
-    @text.bind("<Paste>") { Tk.callback_break }
-    @text.bind("<PasteSelection>", method(:paste_callback))
+    @text.bind('B2-Motion') { |ev|
+      @text.tag_remove 'run', '0.0', 'end'
+      @text.tag_add 'run', 'run', "@#{ev.x},#{ev.y}"
+      @text.tag_add 'run', "@#{ev.x},#{ev.y}", 'run'
+      Tk.callback_break
+    }
+
+    @text.bind('ButtonPress-2') { |ev|
+      @text.tag_remove 'run', '0.0', 'end'
+      @text.mark_set 'run', "@#{ev.x},#{ev.y}"
+    }
+
+    @text.bind('ButtonRelease-2') { |ev|
+      a, b = @text.tag_ranges('run').first
+      if a.nil?  # no selection
+        paste_callback(nil)
+      else
+        cmd = @text.get(a, b)
+      end
+
+      bar_cmd cmd
+
+      @text.tag_remove 'run', '0.0', 'end'
+      Tk.callback_break
+    }
+
     @text.tag_configure "href", :underline => true
+    @text.tag_configure "run", :underline => true
 
     @text.mark_set 'lastinsert', '1.0'
     @text.mark_gravity 'lastinsert', 'left'
