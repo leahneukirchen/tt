@@ -1,0 +1,109 @@
+= tt, a 9term-compatible terminal in Ruby/Tk
+
+This is tt, a very lightweight terminal emulator implemented using
+Ruby 1.9 with no dependencies beyond the standard libraries with Tk
+enabled.
+
+tt provides a very limited feature set, akin to the 9term terminal.
+In fact, it does just about nothing:
+
+    % infocmp 9term 
+    #       Reconstructed via infocmp from file: /usr/share/terminfo/9/9term
+    9term|Plan9 terminal emulator for X,
+            am,
+            bel=^G, cud1=^J,
+
+This means you will not be able to run vi or other curses software.
+Also, there is no support for ANSI color sequences.
+
+However, tt also has some benefits over classic vt100-compatible
+terminal emulators:
+
+* You can fully edit the buffer, fix commands there and resend them
+  (with middle-button-swipe) or add comments.
+
+* By default, scroll mode is enabled so it feels like an ordinary
+  terminal.  If you disable scroll mode, commands displaying more
+  output than fits on the screen will be scrolled no further; use
+  PageUp/PageDown keys to scroll yourself.
+
+* You can easily search in the buffer.  Select text, right-click and
+  select Fwd or Bwd.  The context menu will remember your last action,
+  so searching again works like a breeze.
+
+* The last two features more or less replace more(1) or less(1).
+
+* There is a hold-buffer which you can pull out from the bottom
+  border: Edit text here as you wish and send it with one press of
+  Shift-Return to the terminal at once.  This makes ed(1) or mail(1)
+  way more fun to use.
+
+* There is a command bar which you can pull out from the top border
+  (or prefill with the -border argument): Insert comands there and either
+  middle-click on single words or middle-button-swipe a selection to
+  run them in the terminal.  This is nice for frequent users of
+  make(1) as well as users of MH (just put next/prev/etc. there).
+
+* URLs are clickable and open in your browser if you left-click them.
+
+* You can use non-proportional fonts.
+
+== Tips and tricks
+
+Text is only ever appended at the end of the buffer.  However, tt
+tries to make sense of carriage-returns, so wget etc. will show proper
+progress bars.
+
+Old-school line discipline editing with Backspace, C-w (delete last
+word) and C-u (delete all input) works well; readline editing of
+course doesn't (most tab-completion systems will work, though).
+
+If your cursor is not at the end of buffer, tt should behave like a
+simple text editor with Emacs-resembling keybindings.
+Home and End keys always move to the very top and very end of buffer.
+
+You can set the tt window title with an xterm-compatible escape sequence,
+for example using:
+
+    label() {
+        echo "$@" | awk '{printf("\033];%s\007", $0);}' >/dev/tty
+    }
+
+There is a "ziconbeep" feature, that is, if there is any output while
+the window is iconfied, the window title is prefixed with three stars.
+(This has nothing much to do with what ziconbeep originally meant.)
+
+== Sweep commands
+
+If you sweep these commands either in the menu bar or the main window,
+they trigger special options:
+
+    Font       toggles the font between fixed and proportional
+    Font FNT   sets the font to FNT
+    Scroll     toggles autoscroll
+    Cut        deletes the current selection, keeping it as primary selection
+    Paste      pastes the primary selection at *insertion point*
+    Send       sends the current selection to the terminal
+    Clear      clears the terminal
+    Fwd        searches for the current selection
+    Fwd STR    searches for STR
+    /STR       searches for STR
+    Bwd        searches backward for the current selection
+    Bwd STR    searches backward for STR
+    ?STR       searches backward for STR
+    Intr       sends SIGINT to the terminal
+    Quit       exits tt
+
+All other swept text is sent to the terminal.
+
+The commands Fwd, Bwd, Cut, Paste, Send, Clear, Font, Scroll also can
+be run from the right-button context menu.
+    
+== Copying
+
+Written by Christian Neukirchen <chneukirchen@gmail.com> in 2012.
+
+To the extent possible under law, Christian Neukirchen has waived
+all copyright and related or neighboring rights to this work.
+
+http://creativecommons.org/publicdomain/zero/1.0/
