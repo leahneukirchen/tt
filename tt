@@ -59,7 +59,13 @@ class TT
 
     @text.bind("KeyPress") { |o|
       case o.keysym
-      when "Next", "Prior", "Up", "Down", "Left", "Right"
+      when "Next"
+        # Put cursor at end on last Next.
+        if @text.yview[1] > 0.99999
+          @text.mark_set 'insert', 'end'
+        end
+        # PASSTHRU, no callback_break!
+      when "Prior", "Up", "Down", "Left", "Right"
         # XXX good idea left/right?
         # PASSTHRU, no callback_break!
       when "Home"
@@ -71,10 +77,11 @@ class TT
         @text.mark_set('insert', 'end')
         Tk.callback_break
       else
-        
+        # are we at the end?
         if @text.index('end') == @text.index('insert + 1 chars')
           @output.write o.char
           @text.see('end')
+          @text.mark_set('lastinsert', 'insert')
           Tk.callback_break
         elsif o.char == ?\C-w
           # XXX skip whitespace first
@@ -91,6 +98,9 @@ class TT
     @text.bind("<Paste>") { Tk.callback_break }
     @text.bind("<PasteSelection>", method(:paste_callback))
     @text.tag_configure "href", :underline => true
+
+    @text.mark_set 'lastinsert', '1.0'
+    @text.mark_gravity 'lastinsert', 'left'
 
     @hold = TkText.new(@panes) {
       foreground opts["fg"]
@@ -240,6 +250,8 @@ class TT
           
           if @scroll.value == "1"
             @text.yview_moveto 1
+          else
+            @text.yview 'lastinsert'
           end
         end
       rescue Errno::EIO
