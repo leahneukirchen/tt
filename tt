@@ -184,9 +184,9 @@ class TT
 
     # hacky
     menufontheight = TkFont.metrics("TkMenuFont", "linespace")+5
-    @root.bind '3', lambda { |x, y|
-      menu.popup(x-10,y-10-@lastcmd*menufontheight)
-    }, "%X %Y"
+    @root.bind 'Button-3', lambda { |ev|
+      menu.popup(ev.x_root-10,ev.y_root-10-@lastcmd*menufontheight)
+    }
 
     if TIOCSWINSZ
       pw = ph = 0
