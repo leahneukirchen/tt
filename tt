@@ -293,7 +293,7 @@ class TT
       begin
         while buf = @input.readpartial(4096)
           # Try to sanitize CRLF.
-          buf = fix_utf8(buf).gsub(/\r+\n/, "\n")
+          buf = fix_utf8(buf).gsub(/\r+\n/, "\n").gsub(/\r {10,}\r/, "")
 
           out = ""
           buf.each_char { |char|
