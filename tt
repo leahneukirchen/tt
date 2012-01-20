@@ -190,15 +190,23 @@ class TT
 
     if TIOCSWINSZ
       pw = ph = 0
+      timer = nil
       @root.bind('Configure') { |o|
-        # XXX slow down
         if @pid
           unless pw == o.width && ph == o.height
             pw = o.width
             ph = o.height
-            w = @text.winfo_width / @font_width
-            h = @text.winfo_height / @font_height
-            @output.ioctl(TIOCSWINSZ, [h, w, ph, pw].pack('SSSS'))
+
+            # wait 500ms before setting terminal size to avoid stutter
+            timer ||= TkTimer.start(500) {
+              w = @text.winfo_width / @font_width
+              h = @text.winfo_height / @font_height
+
+              @output.ioctl(TIOCSWINSZ, [h, w, ph, pw].pack('SSSS'))
+
+              timer.cancel
+              timer = nil
+            }
           end
         end
       }
