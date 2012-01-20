@@ -44,6 +44,47 @@ class TT
       orient 'vertical'
     }
 
+    @bar = TkText.new {
+      height opts["bar"].to_s.count("\n") + 1
+      foreground opts["fg"]
+      background opts["bg"]
+      insertbackground opts["cr"] || opts["fg"]
+      insertofftime 0  # don't blink
+      tabstyle 'wordprocessor'
+      pack 'fill' => 'both', 'expand' => 'yes'
+    }
+
+    @bar.insert 'end', opts["bar"]
+
+    @bar.tag_configure 'run', 'underline' => true
+
+    @bar.bind('B2-Motion') { |ev|
+      @bar.tag_remove 'run', '0.0', 'end'
+      @bar.tag_add 'run', 'run', "@#{ev.x},#{ev.y}"
+      @bar.tag_add 'run', "@#{ev.x},#{ev.y}", 'run'
+    }
+
+    @bar.bind('ButtonPress-2') { |ev|
+      @bar.tag_remove 'run', '0.0', 'end'
+      @bar.mark_set 'run', "@#{ev.x},#{ev.y}"
+    }
+
+    @bar.bind('ButtonRelease-2') { |ev|
+      a, b = @bar.tag_ranges('run').first
+      if a.nil?  # use single word
+        cmd = @bar.get("@#{ev.x},#{ev.y} wordstart",
+                    "@#{ev.x},#{ev.y} wordend")
+      else
+        cmd = @bar.get(a, b)
+      end
+
+      bar_cmd cmd
+
+      @bar.tag_remove 'run', '0.0', 'end'
+      Tk.callback_break
+    }
+
+
     # XXX provide text via socket?
     @text = TkText.new(@panes) {
       yscrollbar @yscroll  if opts["sb"]
@@ -92,7 +133,7 @@ class TT
           # PASSTHRU, no callback_break!
         end
       end
-      
+
     }
 
     @text.bind("<Paste>") { Tk.callback_break }
@@ -118,14 +159,19 @@ class TT
       Tk.callback_break
     }
 
+    if opts["bar"]
+      @panes.add @bar, :stretch => 'never'
+    else
+      @panes.add @bar, :stretch => 'never', :height => 1
+    end
     @panes.add @text, :stretch => 'always'
-    @panes.add @hold, :stretch => 'never', :height => '1'
+    @panes.add @hold, :stretch => 'never', :height => 1
     @panes.pack 'fill' => 'both', 'expand' => 'yes'
 
     font_cmd
 
     menu = TkMenu.new(@root) { tearoff false }
-    
+
     menu.add_command :label => "fwd", :command => method(:fwd_cmd)
     menu.add_command :label => "bwd", :command => method(:bwd_cmd)
     menu.add_command :label => "cut", :command => method(:cut_cmd)
@@ -171,6 +217,7 @@ class TT
 
   attr_reader :font
   def font=(font)
+    @bar.font = font
     @text.font = font
     @hold.font = font
     @font = font
@@ -213,7 +260,7 @@ class TT
       begin
         while buf = @input.readpartial(4096)
           buf = fix_utf8(buf).delete("\r")
-          
+
           # XXX handle \r properly, clear to beginning of line? (also for C-u)
           out = ""
           buf.each_char { |char|
@@ -227,8 +274,8 @@ class TT
               out << char
             end
           }
-          
-          out.gsub!(/\033\];(.*?)\007/) { 
+
+          out.gsub!(/\033\];(.*?)\007/) {
             self.title = $1
             ""
           }
@@ -247,7 +294,7 @@ class TT
           end
 
           self.title = self.title
-          
+
           if @scroll.value == "1"
             @text.yview_moveto 1
           else
@@ -320,6 +367,35 @@ class TT
     end
   end
 
+  def bar_cmd(cmd)
+    case cmd.lstrip
+    when "Font"
+      @mono.value = 1 - @mono.value.to_i
+      font_cmd
+    when "Scroll"
+      @scroll.value = 1 - @scroll.value.to_i
+    when "Paste"
+      paste_cmd
+    when /\A(\/|Fwd )/
+      if match = @text.tksearch($', 'insert + 1c', 'end')
+        @text.tag_remove 'sel', 'sel.first', 'sel.last'  rescue nil
+        @text.tag_add 'sel', match, "#{match} + #{$'.size} chars"
+        @text.mark_set('insert', 'sel.first')
+      end
+    when /\A(\?|Bwd )/
+      if match = @text.tksearch(['backwards'], $', 'insert', '1.0')
+        @text.tag_remove 'sel', 'sel.first', 'sel.last'  rescue nil
+        @text.tag_add 'sel', match, "#{match} + #{$'.size} chars"
+        @text.mark_set('insert', 'sel.first')
+      end
+    when "Quit"
+      exit
+    else
+      @output.write cmd + "\n"
+      @text.mark_set('insert', 'end')
+    end
+  end
+
   def link_action(ev)
     a, b = @text.tag_prevrange("href", @text.index("@#{ev.x},#{ev.y}"))
     url = @text.get(a, b)
@@ -343,12 +419,13 @@ opts = {
   "tn" => "9term",
   "title" => "tt",
   "cmd" => [ENV["SHELL"] || "/bin/sh"],
+  "bar" => nil,
 }
 until ARGV.empty?
   case arg = ARGV.shift
   when /\A([+-])(sb|sc|fw|cu|zi)\z/
     opts[$2] = ($1 == "-")
-  when /\A-(fn|af|tn|fg|bg|cr|title|browser)\z/
+  when /\A-(fn|af|tn|fg|bg|cr|title|browser|bar)\z/
     opts[$1] = ARGV.shift
   when /\A-(g(eometry)?)\z/
     g = ARGV.shift
@@ -366,7 +443,7 @@ until ARGV.empty?
     puts "Usage: tt [-help] [--help]
  [-tn string] [-geometry geometry] [-/+fw] [-/+sb] [-/+sc] [-/+zi]
  [-bg color] [-fg color] [-cr color] [-fn fontname] [-af fontname]
- [-browser string] [-title string] [-e command arg...]"
+ [-bar string] [-browser string] [-title string] [-e command arg...]"
     exit
   else
     abort "invalid argument #{arg}"
