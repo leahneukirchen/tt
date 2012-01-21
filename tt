@@ -362,6 +362,7 @@ class TT
       @text.tag_remove 'sel', 'sel.first', 'sel.last'
       @text.tag_add 'sel', match, "#{match} + #{sel.size} chars"
       @text.mark_set('insert', 'sel.first')
+      @text.see('insert')
     end
   end
 
@@ -372,6 +373,7 @@ class TT
       @text.tag_remove 'sel', 'sel.first', 'sel.last'
       @text.tag_add 'sel', match, "#{match} + #{sel.size} chars"
       @text.mark_set('insert', 'sel.first')
+      @text.see('insert')
     end
   end
 
@@ -445,12 +447,14 @@ class TT
         @text.tag_remove 'sel', 'sel.first', 'sel.last'  rescue nil
         @text.tag_add 'sel', match, "#{match} + #{$'.size} chars"
         @text.mark_set('insert', 'sel.first')
+        @text.see('insert')
       end
     when /\A(\?|Bwd )/
       if match = @text.tksearch(['backwards'], $', 'insert', '1.0')
         @text.tag_remove 'sel', 'sel.first', 'sel.last'  rescue nil
         @text.tag_add 'sel', match, "#{match} + #{$'.size} chars"
         @text.mark_set('insert', 'sel.first')
+        @text.see('insert')
       end
     when "Quit"
       exit
