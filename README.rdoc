@@ -15,6 +15,7 @@ In fact, it does just about nothing:
 
 This means you will not be able to run vi or other curses software.
 Also, there is no support for ANSI color sequences.
+Note that "tt" is only two thirds of a real "tty".
 
 However, tt also has some benefits over classic vt100-compatible
 terminal emulators:
