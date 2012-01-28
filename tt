@@ -188,6 +188,7 @@ class TT
       @text.mark_set('insert', 'end')
       @output.write @hold.get('1.0', 'end')
       @text.mark_set('insert', 'end')
+      @text.mark_set('lastinsert', 'insert')
       @hold.delete('1.0', 'end')
       Tk.callback_break
     }
@@ -253,6 +254,7 @@ class TT
     @text.mark_set('insert', 'end')
     @output.write sel
     @text.mark_set('insert', 'end')
+    @text.mark_set('lastinsert', 'insert')
     Tk.callback_break
   end
 
@@ -401,6 +403,7 @@ class TT
     @text.mark_set('insert', 'end')
     @output.write sel
     @text.mark_set('insert', 'end')
+    @text.mark_set('lastinsert', 'insert')
   end
 
   def clear_cmd
@@ -461,6 +464,7 @@ class TT
     else
       @output.write cmd + "\n"
       @text.mark_set('insert', 'end')
+      @text.mark_set('lastinsert', 'insert')
     end
   end
 
